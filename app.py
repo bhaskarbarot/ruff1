@@ -2,51 +2,49 @@ import streamlit as st
 import pandas as pd
 import pickle
 import numpy as np
-import plotly.express as px
 from sklearn.metrics.pairwise import cosine_similarity
 
-# 🔹 Local paths instead of AWS S3
-DATA_FILE_PATH = "processed_audible_data.csv"
+# Local file paths
+DATA_FILE_PATH = "processed_audible_data(1).csv"
 MODEL_FILE_PATH = "book_recommender_models_dbscan_lsa.pkl"
 
-# 🔹 Function to load the model from a local file
+# Load the model from local file
 @st.cache_resource
 def load_model():
     try:
         with open(MODEL_FILE_PATH, "rb") as f:
-            model_data = pickle.load(f)
-        return model_data
+            return pickle.load(f)
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
         st.stop()
 
-# 🔹 Load dataset from local CSV
+# Load dataset from local CSV
 @st.cache_data
 def load_data():
     try:
         df = pd.read_csv(DATA_FILE_PATH)
-
+        # Clean the data
         df['Rating'] = pd.to_numeric(df['Rating'], errors='coerce')
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
         df.dropna(subset=['Author', 'Book Name'], inplace=True)
-
         return df
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         st.stop()
 
-# 🔹 Streamlit App
 def main():
     st.title('📚 Audible Book Recommendation System')
     
-    # Load the model and dataset
+    # Load data and model
     model_data = load_model()
     df = load_data()
 
+    # Sidebar filters
     st.sidebar.header('Your Preferences')
     min_rating = st.sidebar.slider('Minimum Rating (out of 5):', 1.0, 5.0, 4.0, 0.1)
     max_price = st.sidebar.slider('Maximum Price (in $):', 0.0, 500.0, 50.0)
 
+    # Book recommendations based on filters
     if st.button('Recommend Books'):
         filtered_books = df[(df['Rating'] >= min_rating) & (df['Price'] <= max_price)]
         if not filtered_books.empty:
@@ -65,6 +63,7 @@ def main():
     st.markdown('---')
     st.header("Explore Books")
 
+    # Search options
     search_method = st.radio("How would you like to find books?", ["Search by Book Name", "Browse All Books"])
     
     if search_method == "Search by Book Name":
@@ -75,10 +74,13 @@ def main():
             try:
                 book_idx = df[df['Book Name'] == book_name].index[0]
                 features = model_data['features']
+                
+                # Handle both dense and sparse matrices
                 similarities = cosine_similarity(
                     features[book_idx:book_idx+1] if isinstance(features, np.ndarray) else features[book_idx:book_idx+1].toarray(),
                     features if isinstance(features, np.ndarray) else features.toarray()
                 )
+                
                 similar_indices = similarities.argsort()[0][-6:-1][::-1]
                 similar_books = df.iloc[similar_indices]
 
@@ -93,6 +95,7 @@ def main():
             except Exception as e:
                 st.error(f"Error finding similar books: {str(e)}")
     else:
+        # Browse top rated books
         filtered_books = df[df['Rating'] >= min_rating].sort_values('Rating', ascending=False)
         st.subheader('Top Rated Books')
         for _, book in filtered_books.head(10).iterrows():
