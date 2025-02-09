@@ -4,31 +4,33 @@ import pickle
 import numpy as np
 import plotly.express as px
 from sklearn.metrics.pairwise import cosine_similarity
-import boto3  # Still needed for the model file
 
-# 🔹 Replace with your actual S3 bucket and file names
-BUCKET_NAME = "book15"
-DATA_FILE_URL = f"https://{BUCKET_NAME}.s3.amazonaws.com/processed_audible_data(1).csv"
-MODEL_FILE_KEY = "book_recommender_models_dbscan_lsa.pkl"
+# 🔹 Local paths instead of AWS S3
+DATA_FILE_PATH = "processed_audible_data.csv"
+MODEL_FILE_PATH = "book_recommender_models_dbscan_lsa.pkl"
 
-# 🔹 Function to load the model from S3 (boto3 still needed)
-def load_model_from_s3(file_key):
-    s3 = boto3.client("s3")
-    obj = s3.get_object(Bucket=BUCKET_NAME, Key=file_key)
-    return pickle.loads(obj["Body"].read())
+# 🔹 Function to load the model from a local file
+@st.cache_resource
+def load_model():
+    try:
+        with open(MODEL_FILE_PATH, "rb") as f:
+            model_data = pickle.load(f)
+        return model_data
+    except Exception as e:
+        st.error(f"Error loading model: {str(e)}")
+        st.stop()
 
-# 🔹 Load dataset from public S3 URL
+# 🔹 Load dataset from local CSV
 @st.cache_data
 def load_data():
     try:
-        model_data = load_model_from_s3(MODEL_FILE_KEY)
-        df = pd.read_csv(DATA_FILE_URL)
+        df = pd.read_csv(DATA_FILE_PATH)
 
         df['Rating'] = pd.to_numeric(df['Rating'], errors='coerce')
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
         df.dropna(subset=['Author', 'Book Name'], inplace=True)
 
-        return model_data, df
+        return df
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         st.stop()
@@ -38,7 +40,8 @@ def main():
     st.title('📚 Audible Book Recommendation System')
     
     # Load the model and dataset
-    model_data, df = load_data()
+    model_data = load_model()
+    df = load_data()
 
     st.sidebar.header('Your Preferences')
     min_rating = st.sidebar.slider('Minimum Rating (out of 5):', 1.0, 5.0, 4.0, 0.1)
