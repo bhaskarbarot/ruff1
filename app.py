@@ -2,42 +2,42 @@ import streamlit as st
 import pandas as pd
 import pickle
 import numpy as np
-import boto3
 import plotly.express as px
 from sklearn.metrics.pairwise import cosine_similarity
+import boto3  # Still needed for the model file
 
-# AWS S3 Configuration
+# 🔹 Replace with your actual S3 bucket and file names
 BUCKET_NAME = "book15"
-DATA_FILE_KEY = "processed_audible_data(1).csv"
+DATA_FILE_URL = f"https://{BUCKET_NAME}.s3.amazonaws.com/processed_audible_data(1).csv"
 MODEL_FILE_KEY = "book_recommender_models_dbscan_lsa.pkl"
 
-# Function to load file from S3
-def load_s3_file(file_key, is_pickle=False):
+# 🔹 Function to load the model from S3 (boto3 still needed)
+def load_model_from_s3(file_key):
     s3 = boto3.client("s3")
     obj = s3.get_object(Bucket=BUCKET_NAME, Key=file_key)
-    
-    if is_pickle:
-        return pickle.loads(obj["Body"].read())
-    else:
-        return pd.read_csv(obj["Body"])
+    return pickle.loads(obj["Body"].read())
 
-# Load the model and dataset
+# 🔹 Load dataset from public S3 URL
+@st.cache_data
 def load_data():
     try:
-        model_data = load_s3_file(MODEL_FILE_KEY, is_pickle=True)
-        df = load_s3_file(DATA_FILE_KEY)
+        model_data = load_model_from_s3(MODEL_FILE_KEY)
+        df = pd.read_csv(DATA_FILE_URL)
 
         df['Rating'] = pd.to_numeric(df['Rating'], errors='coerce')
         df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
         df.dropna(subset=['Author', 'Book Name'], inplace=True)
+
         return model_data, df
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         st.stop()
 
-# Main Streamlit app
+# 🔹 Streamlit App
 def main():
     st.title('📚 Audible Book Recommendation System')
+    
+    # Load the model and dataset
     model_data, df = load_data()
 
     st.sidebar.header('Your Preferences')
@@ -103,4 +103,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
